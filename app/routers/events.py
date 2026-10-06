@@ -1,9 +1,10 @@
 """Event management endpoints (admin-guarded for CUD operations)."""
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_admin, get_current_user
+from app.core.deps import get_current_admin
 from app.models.event import Event
 from app.models.registration import Registration
 from app.models.user import User
@@ -13,26 +14,48 @@ from app.schemas import EventCreate, EventOut, EventUpdate, EventWithCounts
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 
-@router.get("", response_model=list[EventOut])
+@router.get("", response_model=list[EventWithCounts])
 def list_events(
     status_filter: str | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
 ) -> list[Event]:
-    """List available events (optionally filter by status)."""
+    """List events with live booking/waitlist counts (public read).
+
+    Counts are aggregated in two grouped queries so the browse page needs a
+    single request instead of one detail fetch per event.
+    """
     query = db.query(Event)
     if status_filter is not None:
         query = query.filter(Event.status == status_filter)
-    return list(query.order_by(Event.event_date.asc()).all())
+    events = list(query.order_by(Event.event_date.asc()).all())
+    if not events:
+        return events
+
+    event_ids = [e.id for e in events]
+    confirmed = dict(
+        db.query(Registration.event_id, func.count(Registration.id))
+        .filter(Registration.event_id.in_(event_ids), Registration.status == "confirmed")
+        .group_by(Registration.event_id)
+        .all()
+    )
+    waiting = dict(
+        db.query(Waitlist.event_id, func.count(Waitlist.id))
+        .filter(Waitlist.event_id.in_(event_ids), Waitlist.status == "waiting")
+        .group_by(Waitlist.event_id)
+        .all()
+    )
+    for event in events:
+        event.confirmed_bookings = int(confirmed.get(event.id, 0))
+        event.waitlist_count = int(waiting.get(event.id, 0))
+    return events
 
 
 @router.get("/{event_id}", response_model=EventWithCounts)
 def get_event(
     event_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
 ) -> Event:
-    """Retrieve event details including live booking counts."""
+    """Retrieve event details including live booking counts. Public read."""
     event = db.get(Event, event_id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")

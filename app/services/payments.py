@@ -9,12 +9,27 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.models.event import Event
 from app.models.payment import Payment
 from app.models.registration import Registration
 
 
 class PaymentError(Exception):
     pass
+
+
+def event_fee(event: Event) -> Decimal:
+    """Demo pricing hook: flat fee when the event venue is tagged `paid:`.
+
+    Keeps the payment path exercised without introducing a price column that
+    the LLD does not define.
+    """
+    if event.venue and event.venue.lower().startswith("paid:"):
+        try:
+            return Decimal(event.venue.split(":", 1)[1])
+        except Exception:
+            return Decimal("0.00")
+    return Decimal("0.00")
 
 
 def _call_gateway(amount: Decimal) -> tuple[str, str]:
@@ -30,7 +45,10 @@ def initiate_payment(db: Session, registration: Registration) -> Payment:
     if existing is not None:
         raise PaymentError("Payment already exists for this registration")
 
-    payment = Payment(registration_id=registration.id, amount=Decimal("0.00"), status="pending")
+    amount = event_fee(registration.event)
+    payment = Payment(
+        registration_id=registration.id, amount=amount, status="pending"
+    )
     db.add(payment)
     db.flush()
 

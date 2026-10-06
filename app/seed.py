@@ -3,7 +3,7 @@
 Usage (with the venv active):
     python -m app.seed
 """
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
@@ -50,8 +50,8 @@ def seed() -> None:
                 event_name="Python Conf 2026",
                 description="A one-day conference on Python and FastAPI.",
                 event_date=future,
-                start_time="09:00",
-                end_time="17:00",
+                start_time=time(9, 0),
+                end_time=time(17, 0),
                 venue="Grand Hall, Tech Park",
                 capacity=2,
                 status="scheduled",
@@ -61,8 +61,8 @@ def seed() -> None:
                 event_name="Paid Workshop: SQLAlchemy Deep Dive",
                 description="Hands-on paid workshop.",
                 event_date=future,
-                start_time="10:00",
-                end_time="14:00",
+                start_time=time(10, 0),
+                end_time=time(14, 0),
                 venue="paid:49.99",  # flat demo fee hook used by the payment flow
                 capacity=30,
                 status="scheduled",
@@ -72,8 +72,8 @@ def seed() -> None:
                 event_name="Retro Meetup (completed)",
                 description="Already happened; certificates can be issued.",
                 event_date=past,
-                start_time="18:00",
-                end_time="21:00",
+                start_time=time(18, 0),
+                end_time=time(21, 0),
                 venue="Community Center",
                 capacity=100,
                 status="completed",

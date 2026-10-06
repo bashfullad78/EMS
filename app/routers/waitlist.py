@@ -33,6 +33,24 @@ def join_waitlist(
     return entry
 
 
+@router.get("/mine", response_model=list[WaitlistOut])
+def list_my_waitlist_entries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Waitlist]:
+    """List the current user's waitlist entries (used by the event page to
+    show the user's position instead of a dead join button)."""
+    return list(
+        db.query(Waitlist)
+        .filter(
+            Waitlist.user_id == current_user.id,
+            Waitlist.status.in_(["waiting", "promoted"]),
+        )
+        .order_by(Waitlist.joined_date.asc())
+        .all()
+    )
+
+
 @router.get("/{entry_id}", response_model=WaitlistOut)
 def get_waitlist_entry(
     entry_id: int,

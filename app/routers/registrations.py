@@ -4,10 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.payment import Payment
 from app.models.registration import Registration
 from app.models.user import User
 from app.models.waitlist import Waitlist
-from app.schemas import RegistrationCreate, RegistrationOut, WaitlistOut
+from app.schemas import (
+    PaymentOut,
+    RegistrationCreate,
+    RegistrationOut,
+    WaitlistOut,
+)
 from app.services import bookings
 from app.services.bookings import BookingError
 from app.services.notifications import send_notification
@@ -33,13 +39,21 @@ def create_registration(
 
     db.commit()
     if isinstance(result, Registration):
+        # Paid events charge inline during booking; surface the receipt.
+        payment = (
+            db.query(Payment)
+            .filter(Payment.registration_id == result.id)
+            .first()
+        )
         return {
             "result": "booked",
             "registration": RegistrationOut.model_validate(result),
+            "payment": PaymentOut.model_validate(payment) if payment else None,
         }
     return {
         "result": "waitlisted",
         "waitlist": WaitlistOut.model_validate(result),
+        "payment": None,
     }
 
 

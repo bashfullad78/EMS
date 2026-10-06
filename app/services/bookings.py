@@ -15,7 +15,7 @@ from app.models.event import Event
 from app.models.registration import Registration
 from app.models.waitlist import Waitlist
 from app.services.notifications import send_notification
-from app.services.payments import initiate_payment
+from app.services.payments import event_fee, initiate_payment
 
 
 class BookingError(Exception):
@@ -74,7 +74,7 @@ def book_event(db: Session, user_id: int, event_id: int) -> Registration | Waitl
 
         # Payment required for paid events; the simulated gateway charges a
         # flat demo fee when the event was created with a fee.
-        fee = _event_fee(db, event)
+        fee = event_fee(event)
         if fee > Decimal("0"):
             initiate_payment(db, registration)
 
@@ -90,6 +90,28 @@ def book_event(db: Session, user_id: int, event_id: int) -> Registration | Waitl
         return registration
 
     # Event full -> offer/add user to waitlist with a valid position.
+    existing_entry = (
+        db.query(Waitlist)
+        .filter(Waitlist.user_id == user_id, Waitlist.event_id == event_id)
+        .first()
+    )
+    if existing_entry is not None:
+        if existing_entry.status in ("waiting", "promoted"):
+            # Reclicking "Join waitlist" is a no go, not an error.
+            return existing_entry
+        # A previously removed/expired entry revives with a fresh position.
+        existing_entry.status = "waiting"
+        existing_entry.position = next_waitlist_position(db, event_id)
+        db.flush()
+        send_notification(
+            db,
+            user_id,
+            f"Event '{event.event_name}' is full. You are waitlisted at position "
+            f"{existing_entry.position}.",
+            type_="waitlist",
+        )
+        return existing_entry
+
     waitlist_entry = Waitlist(
         user_id=user_id,
         event_id=event_id,
@@ -107,20 +129,6 @@ def book_event(db: Session, user_id: int, event_id: int) -> Registration | Waitl
         type_="waitlist",
     )
     return waitlist_entry
-
-
-def _event_fee(db: Session, event: Event) -> Decimal:
-    """Demo pricing hook: flat fee when the event venue is tagged `paid:`.
-
-    Keeps the payment path exercised without introducing a price column that
-    the LLD does not define.
-    """
-    if event.venue and event.venue.lower().startswith("paid:"):
-        try:
-            return Decimal(event.venue.split(":", 1)[1])
-        except Exception:
-            return Decimal("0")
-    return Decimal("0")
 
 
 def cancel_registration(db: Session, registration: Registration) -> Registration:
@@ -183,10 +191,24 @@ def join_waitlist(db: Session, user_id: int, event_id: int) -> Waitlist:
     if existing is not None:
         raise BookingError("User is already on the waitlist for this event")
 
-    entry = Waitlist(
-        user_id=user_id, event_id=event_id, position=next_waitlist_position(db, event_id)
+    # A removed/expired row still owns the (user, event) unique key: revive it
+    # instead of inserting a duplicate row.
+    prior = (
+        db.query(Waitlist)
+        .filter(Waitlist.user_id == user_id, Waitlist.event_id == event_id)
+        .first()
     )
-    db.add(entry)
+    if prior is not None:
+        prior.status = "waiting"
+        prior.position = next_waitlist_position(db, event_id)
+        entry = prior
+    else:
+        entry = Waitlist(
+            user_id=user_id,
+            event_id=event_id,
+            position=next_waitlist_position(db, event_id),
+        )
+        db.add(entry)
     db.flush()
 
     send_notification(
