@@ -21,6 +21,12 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str 
 
+    
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_LOGIN_PER_MINUTE: int = 5
+    RATE_LIMIT_REGISTER_PER_MINUTE: int = 10
+    RATE_LIMIT_ACCOUNT_UPDATE_PER_MINUTE: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:
