@@ -1,15 +1,29 @@
 """Shared fixtures: file-backed SQLite + httpx client against the FastAPI app."""
+import os
 from collections.abc import Generator
 from datetime import date, time, timedelta
+
+# Keep tests off any real database: DATABASE_URL set in the shell still wins
+# (os.environ beats .env in pydantic-settings), otherwise fall back to SQLite.
+os.environ.setdefault("DATABASE_URL", "sqlite:///./ems_test.db")
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.main import app
 from app.models.event import Event
 from app.models.user import User
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _disable_rate_limit():
+    """Rate limiting is off for the shared suite (its own tests re-enable it)."""
+    settings.RATE_LIMIT_ENABLED = False
+    yield
+    settings.RATE_LIMIT_ENABLED = True
 
 
 @pytest.fixture(scope="session", autouse=True)
