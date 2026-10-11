@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.ratelimit import rate_limit
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas import Token, UserCreate, UserLogin, UserOut, UserUpdate
@@ -13,7 +14,11 @@ users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)) -> User:
+def register(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(rate_limit("RATE_LIMIT_REGISTER_PER_MINUTE")),
+) -> User:
     """Register a new user; duplicate emails are rejected."""
     existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing is not None:
@@ -36,7 +41,11 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> User:
 
 
 @router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
+def login(
+    payload: UserLogin,
+    db: Session = Depends(get_db),
+    _: None = Depends(rate_limit("RATE_LIMIT_LOGIN_PER_MINUTE")),
+) -> Token:
     """Authenticate a user and return a JWT access token."""
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if user is None or not verify_password(payload.password, user.password_hash):
@@ -67,6 +76,7 @@ def update_user(
     payload: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(rate_limit("RATE_LIMIT_ACCOUNT_UPDATE_PER_MINUTE")),
 ) -> User:
     """Update a user's profile (self or admin)."""
     if current_user.id != user_id and not current_user.is_admin:
