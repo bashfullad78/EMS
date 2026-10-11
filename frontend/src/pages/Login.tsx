@@ -14,8 +14,6 @@ import { api, errorMessage, type UserOut } from "../lib/api";
 import { Field, inputClass, Spinner } from "../components/ui";
 import { EASE } from "../lib/anim";
 
-/** Seeded demo credentials from `python -m app.seed`. */
-const DEMO_ADMIN = { email: "admin@example.com", password: "admin-password" };
 const DEMO_ATTENDEE = { email: "alice@example.com", password: "alice-password" };
 
 type Mode = "signin" | "signup";
@@ -262,26 +260,9 @@ export default function Login() {
               Demo access
             </p>
             <p className="mt-1 text-xs leading-relaxed text-cream-600">
-              Seeded accounts — tap to fill:
+              Seeded attendee account — tap to fill:
             </p>
             <div className="mt-2.5 space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("signin");
-                  setEmail(DEMO_ADMIN.email);
-                  setPassword(DEMO_ADMIN.password);
-                  setError(null);
-                }}
-                className="flex w-full items-center justify-between gap-3 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-gold-300 ring-1 ring-inset ring-ink-700 transition hover:ring-gold-500/40"
-              >
-                <span className="truncate">
-                  {DEMO_ADMIN.email} / {DEMO_ADMIN.password}
-                </span>
-                <span className="shrink-0 rounded bg-ink-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cream-500">
-                  Admin
-                </span>
-              </button>
               <button
                 type="button"
                 onClick={() => {
